@@ -1,7 +1,7 @@
 import toml
 import requests
 
-# Carga de credenciales desde secrets.toml o entorno de Streamlit
+# Carga de credenciales desde Streamlit Cloud Secrets o archivo local
 try:
     import streamlit as st
 
@@ -45,7 +45,7 @@ def ejecutar_sql(sql: str, params: list = None):
         ]
     }
 
-    response = requests.post(ENDPOINT, json=payload, headers=HEADERS, timeout=15)
+    response = requests.post(ENDPOINT, json=payload, headers=HEADERS, timeout=20)
     response.raise_for_status()
     data = response.json()
 
@@ -56,7 +56,7 @@ def ejecutar_sql(sql: str, params: list = None):
 
 
 def init_tablas():
-    """Inicializa las tablas y asegura las columnas para hasta 2 fotos por ítem."""
+    """Inicializa las tablas soportando todos los estados (OP, INP, SI, NO, N/A, P/A) y fotos."""
     ejecutar_sql("""
                  CREATE TABLE IF NOT EXISTS inspecciones_cabecera
                  (
@@ -87,6 +87,7 @@ def init_tablas():
                      CURRENT_TIMESTAMP
                  );
                  """)
+
     ejecutar_sql("""
                  CREATE TABLE IF NOT EXISTS inspecciones_detalle
                  (
@@ -116,19 +117,17 @@ def init_tablas():
                      serie
                      TEXT,
                      estado_operativo
-                     TEXT
-                     CHECK (
-                     estado_operativo
-                     IN
-                 (
-                     'OP',
-                     'INP'
-                 )),
-                     observacion_item TEXT,
-                     accion_correctiva TEXT,
-                     foto_1 TEXT,
-                     foto_2 TEXT,
-                     FOREIGN KEY
+                     TEXT,
+                     observacion_item
+                     TEXT,
+                     accion_correctiva
+                     TEXT,
+                     foto_1
+                     TEXT,
+                     foto_2
+                     TEXT,
+                     FOREIGN
+                     KEY
                  (
                      cabecera_id
                  ) REFERENCES inspecciones_cabecera
@@ -138,16 +137,89 @@ def init_tablas():
                      );
                  """)
 
-    # Migración defensiva si la tabla ya existía sin columnas de fotos
-    res_cols = ejecutar_sql("PRAGMA table_info(inspecciones_detalle);")
-    columnas_actuales = [r[1]["value"] for r in res_cols.get("rows", [])]
+    # Verificar si la tabla antigua tenía el CHECK restrictivo ('OP', 'INP') y migrarla sin perder datos
+    res_schema = ejecutar_sql("SELECT sql FROM sqlite_master WHERE type='table' AND name='inspecciones_detalle';")
+    if res_schema.get("rows"):
+        create_sql = str(res_schema["rows"][0][0]["value"] or "")
+        if "CHECK" in create_sql.upper():
+            ejecutar_sql("""
+                         CREATE TABLE IF NOT EXISTS inspecciones_detalle_new
+                         (
+                             id
+                             INTEGER
+                             PRIMARY
+                             KEY
+                             AUTOINCREMENT,
+                             cabecera_id
+                             INTEGER
+                             NOT
+                             NULL,
+                             item_nro
+                             INTEGER
+                             NOT
+                             NULL,
+                             ubicacion
+                             TEXT
+                             NOT
+                             NULL,
+                             equipo_elemento
+                             TEXT
+                             NOT
+                             NULL,
+                             marca
+                             TEXT,
+                             serie
+                             TEXT,
+                             estado_operativo
+                             TEXT,
+                             observacion_item
+                             TEXT,
+                             accion_correctiva
+                             TEXT,
+                             foto_1
+                             TEXT,
+                             foto_2
+                             TEXT,
+                             FOREIGN
+                             KEY
+                         (
+                             cabecera_id
+                         ) REFERENCES inspecciones_cabecera
+                         (
+                             id
+                         )
+                             );
+                         """)
+            # Asegurar columnas foto_1 y foto_2 antes de copiar
+            res_cols = ejecutar_sql("PRAGMA table_info(inspecciones_detalle);")
+            cols_antiguas = [r[1]["value"] for r in res_cols.get("rows", [])]
+            if "foto_1" not in cols_antiguas:
+                ejecutar_sql("ALTER TABLE inspecciones_detalle ADD COLUMN foto_1 TEXT;")
+            if "foto_2" not in cols_antiguas:
+                ejecutar_sql("ALTER TABLE inspecciones_detalle ADD COLUMN foto_2 TEXT;")
 
-    if "foto_1" not in columnas_actuales:
-        ejecutar_sql("ALTER TABLE inspecciones_detalle ADD COLUMN foto_1 TEXT;")
-    if "foto_2" not in columnas_actuales:
-        ejecutar_sql("ALTER TABLE inspecciones_detalle ADD COLUMN foto_2 TEXT;")
+            ejecutar_sql("""
+                         INSERT INTO inspecciones_detalle_new
+                         (id, cabecera_id, item_nro, ubicacion, equipo_elemento, marca, serie, estado_operativo,
+                          observacion_item, accion_correctiva, foto_1, foto_2)
+                         SELECT id,
+                                cabecera_id,
+                                item_nro,
+                                ubicacion,
+                                equipo_elemento,
+                                marca,
+                                serie,
+                                estado_operativo,
+                                observacion_item,
+                                accion_correctiva,
+                                foto_1,
+                                foto_2
+                         FROM inspecciones_detalle;
+                         """)
+            ejecutar_sql("DROP TABLE inspecciones_detalle;")
+            ejecutar_sql("ALTER TABLE inspecciones_detalle_new RENAME TO inspecciones_detalle;")
 
 
 if __name__ == "__main__":
     init_tablas()
-    print("✅ Tablas y columnas de evidencia fotográfica sincronizadas en Turso.")
+    print("✅ Base de datos Turso actualizada y lista para todos los formatos (R01, R03, R06, R07, R08).")
