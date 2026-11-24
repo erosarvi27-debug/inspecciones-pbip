@@ -1,12 +1,15 @@
 import os
 import re
 import io
+import json
 import base64
 import unicodedata
 from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import db_cloud
+
+MAX_FOTOS_WORD = 8
 
 MAPA_PLANTILLAS = {
     "R01-004-21": ["Plantilla_R01_2.docx", "Plantilla_R01.docx"],
@@ -16,19 +19,16 @@ MAPA_PLANTILLAS = {
     "R08-004-21": ["Plantilla_R08.docx"],
 }
 
-
 def normalizar_texto(txt: str) -> str:
-    """Limpia tildes, signos y espacios para comparar preguntas con precisión."""
+    """Limpia tildes, signos y espacios para emparejar descripciones con exactitud."""
     if not txt:
         return ""
     txt = unicodedata.normalize("NFKD", txt).encode("ASCII", "ignore").decode("ASCII")
     txt = re.sub(r"[^a-zA-Z0-9]", "", txt).lower()
     return txt
 
-
 def insertar_parrafo_antes(parrafo_referencia):
     return parrafo_referencia.insert_paragraph_before()
-
 
 def resolver_ruta_plantilla(codigo_formato: str) -> str:
     candidatos = MAPA_PLANTILLAS.get(codigo_formato, ["Plantilla_R01_2.docx", "Plantilla_R01.docx"])
@@ -36,11 +36,10 @@ def resolver_ruta_plantilla(codigo_formato: str) -> str:
         ruta = os.path.join("plantillas_oficiales", nombre)
         if os.path.exists(ruta):
             return ruta
-    raise FileNotFoundError(f"No se encontró la plantilla para el formato {codigo_formato} en 'plantillas_oficiales/'.")
-
+    raise FileNotFoundError(f"No se encontró la plantilla para {codigo_formato} en 'plantillas_oficiales/'.")
 
 def reemplazar_fecha_documento(doc, fecha_val: str):
-    """Reemplaza FECHA: {{FECHA}} o FECHA: en todas las páginas, párrafos y tablas."""
+    """Reemplaza FECHA: {{FECHA}} o FECHA: en párrafos y tablas de todas las hojas."""
     for p in doc.paragraphs:
         if "FECHA" in p.text.upper():
             p.text = f"FECHA: {fecha_val}"
@@ -60,13 +59,32 @@ def reemplazar_fecha_documento(doc, fecha_val: str):
                             p.runs[0].font.name = "Arial Narrow"
                             p.runs[0].font.size = Pt(10)
 
+def extraer_lista_fotos(f1_col, f2_col, fotos_json_col) -> list:
+    """Obtiene hasta 8 imágenes en Base64 desde fotos_json o desde foto_1/foto_2 (folios antiguos)."""
+    if fotos_json_col and fotos_json_col.get("type") != "null":
+        val_json = fotos_json_col.get("value")
+        if val_json:
+            try:
+                lista = json.loads(val_json)
+                if isinstance(lista, list):
+                    return [x for x in lista if x][:MAX_FOTOS_WORD]
+            except Exception:
+                pass
+
+    # Respaldo para folios históricos guardados con el esquema de 2 fotos
+    fotos_legacy = []
+    if f1_col and f1_col.get("type") != "null" and f1_col.get("value"):
+        fotos_legacy.append(f1_col["value"])
+    if f2_col and f2_col.get("type") != "null" and f2_col.get("value"):
+        fotos_legacy.append(f2_col["value"])
+    return fotos_legacy[:MAX_FOTOS_WORD]
 
 def generar_desde_plantilla(inspeccion_id: int) -> str:
     # 1. Consultar Cabecera
     sql_cab = f"SELECT codigo_formato, fecha_inspeccion, responsable_inspeccion, turno, observacion_general FROM inspecciones_cabecera WHERE id = {inspeccion_id};"
     res_cab = db_cloud.ejecutar_sql(sql_cab)
     if not res_cab.get("rows"):
-        raise ValueError(f"No existe la inspección con ID {inspeccion_id}")
+        raise ValueError(f"No existe la inspección con Folio ID {inspeccion_id}")
 
     fila_cab = res_cab["rows"][0]
     codigo_formato = str(fila_cab[0]["value"] or "R01-004-21").strip()
@@ -78,11 +96,11 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
         fecha_val = fecha_raw
     obs_general = str(fila_cab[4]["value"] or "Sin observaciones.")
 
-    # 2. Consultar Detalles
+    # 2. Consultar Detalles (incluyendo fotos_json)
     sql_det = f"""
-    SELECT item_nro, equipo_elemento, estado_operativo, observacion_item, foto_1, foto_2 
-    FROM inspecciones_detalle 
-    WHERE cabecera_id = {inspeccion_id} 
+    SELECT item_nro, equipo_elemento, estado_operativo, observacion_item, foto_1, foto_2, fotos_json
+    FROM inspecciones_detalle
+    WHERE cabecera_id = {inspeccion_id}
     ORDER BY item_nro ASC;
     """
     res_det = db_cloud.ejecutar_sql(sql_det)
@@ -92,14 +110,14 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
     lista_items_ordenados = []
     for f in filas_det:
         num_it = int(f[0]["value"])
+        lista_fotos = extraer_lista_fotos(f[4], f[5], f[6] if len(f) > 6 else None)
         item_obj = {
             "item": num_it,
             "equipo": str(f[1]["value"] or "").strip(),
             "norm": normalizar_texto(str(f[1]["value"] or "")),
             "estado": str(f[2]["value"] or "").strip(),
             "obs": str(f[3]["value"] or "").strip(),
-            "foto_1": f[4].get("value") if f[4].get("type") != "null" else None,
-            "foto_2": f[5].get("value") if f[5].get("type") != "null" else None
+            "fotos": lista_fotos
         }
         datos_items[num_it] = item_obj
         lista_items_ordenados.append(item_obj)
@@ -133,7 +151,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                     info = datos_items[item_detectado]
                     estado = info["estado"]
                     obs_texto = info["obs"]
-                    f1, f2 = info["foto_1"], info["foto_2"]
+                    fotos = info["fotos"]
 
                     celda_op = celdas[-3]
                     celda_inp = celdas[-2]
@@ -157,7 +175,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                                 p_m.runs[0].font.name = "Arial Narrow"
                                 p_m.runs[0].font.size = Pt(9.5)
 
-                    if obs_texto or f1 or f2:
+                    if obs_texto or fotos:
                         p_obs_celda = celda_obs.paragraphs[0]
                         p_obs_celda.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -177,13 +195,12 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                             "item": item_detectado,
                             "equipo": info["equipo"],
                             "detalle": obs_texto,
-                            "fotos": [f for f in [f1, f2] if f is not None]
+                            "fotos": fotos[:MAX_FOTOS_WORD]
                         })
                         contador_obs += 1
 
     # =========================================================================
-    # CASO B: FORMATOS R03, R06, R07, R08 (Tablas de 5 columnas: Descripción | SI | NO | N/A | P/A)
-    # Soporta múltiples tablas (como las 2 hojas del R03) y sub-ítems (como el R06)
+    # CASO B: FORMATOS R03, R06, R07, R08 (5 columnas: Descripción | SI | NO | N/A | P/A)
     # =========================================================================
     else:
         mapa_col = {"SI": -4, "NO": -3, "N/A": -2, "P/A": -1}
@@ -198,16 +215,13 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                 desc_celda = celdas[0].text.strip()
                 norm_celda = normalizar_texto(desc_celda)
 
-                # Ignorar cabeceras de tabla o filas combinadas (ej. subtítulo escaleras en R06)
                 if not norm_celda or norm_celda == "descripcion":
                     continue
                 if "escalasoescaleras" in norm_celda:
                     continue
-                # Si todas las celdas de la fila apuntan al mismo objeto (colspan=5), saltar
                 if celdas[0]._tc == celdas[-1]._tc:
                     continue
 
-                # Buscar el ítem correspondiente por coincidencia de texto normalizado
                 info_match = None
                 for obj in lista_items_ordenados:
                     if obj["item"] in usados:
@@ -220,9 +234,8 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                 if info_match:
                     estado = info_match["estado"]
                     obs_texto = info_match["obs"]
-                    f1, f2 = info_match["foto_1"], info_match["foto_2"]
+                    fotos = info_match["fotos"]
 
-                    # Limpiar las 4 celdas de opción (SI, NO, N/A, P/A)
                     for idx_opt in [-4, -3, -2, -1]:
                         celdas[idx_opt].text = ""
 
@@ -231,8 +244,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                     p_m = celda_marca.paragraphs[0]
                     p_m.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-                    if obs_texto or f1 or f2:
-                        # Escribir X OBS (n) con subíndice dentro de la casilla marcada
+                    if obs_texto or fotos:
                         r_x = p_m.add_run("X ")
                         r_x.font.bold = True
                         r_x.font.name = "Arial Narrow"
@@ -254,7 +266,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                             "item": info_match["item"],
                             "equipo": info_match["equipo"],
                             "detalle": obs_texto,
-                            "fotos": [f for f in [f1, f2] if f is not None]
+                            "fotos": fotos[:MAX_FOTOS_WORD]
                         })
                         contador_obs += 1
                     else:
@@ -264,7 +276,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                         r_x.font.size = Pt(9.5)
 
     # =========================================================================
-    # 5. SECCIÓN INFERIOR: OBSERVACIONES, FOTOS (4.16 x 7.00 cm) Y FIRMA EN BLANCO
+    # 5. SECCIÓN INFERIOR: OBSERVACIONES, HASTA 8 FOTOS (4.16 x 7.00 cm) Y FIRMA
     # =========================================================================
     p_obs_titulo = None
     p_firma = None
@@ -294,7 +306,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
         if lista_observaciones_pie:
             for obs_data in lista_observaciones_pie:
                 p_texto = insertar_parrafo_antes(p_firma)
-                p_texto.paragraph_format.space_before = Pt(4)
+                p_texto.paragraph_format.space_before = Pt(6)
                 p_texto.paragraph_format.space_after = Pt(4)
 
                 r_pref = p_texto.add_run("OBS ")
@@ -317,20 +329,26 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                 r_det.font.name = "Arial Narrow"
                 r_det.font.size = Pt(10)
 
-                for b64_str in obs_data["fotos"][:2]:
-                    try:
-                        img_bytes = base64.b64decode(b64_str)
-                        img_stream = io.BytesIO(img_bytes)
+                # Inserta hasta 8 fotos centradas en filas ordenadas de a 2 (4.16 cm x 7.00 cm)
+                fotos_obs = obs_data["fotos"][:MAX_FOTOS_WORD]
+                for idx_par in range(0, len(fotos_obs), 2):
+                    par_actual = fotos_obs[idx_par : idx_par + 2]
+                    p_img = insertar_parrafo_antes(p_firma)
+                    p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    p_img.paragraph_format.space_before = Pt(4)
+                    p_img.paragraph_format.space_after = Pt(6)
 
-                        p_img = insertar_parrafo_antes(p_firma)
-                        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        p_img.paragraph_format.space_before = Pt(4)
-                        p_img.paragraph_format.space_after = Pt(6)
-
-                        run_img = p_img.add_run()
-                        run_img.add_picture(img_stream, width=Cm(7.0), height=Cm(4.16))
-                    except Exception as e_img:
-                        print(f"Advertencia al insertar imagen: {e_img}")
+                    for pos_en_par, b64_str in enumerate(par_actual):
+                        try:
+                            img_bytes = base64.b64decode(b64_str)
+                            img_stream = io.BytesIO(img_bytes)
+                            run_img = p_img.add_run()
+                            run_img.add_picture(img_stream, width=Cm(7.0), height=Cm(4.16))
+                            if pos_en_par == 0 and len(par_actual) == 2:
+                                run_sep = p_img.add_run("   ")
+                                run_sep.font.size = Pt(8)
+                        except Exception as e_img:
+                            print(f"Advertencia al insertar imagen: {e_img}")
         else:
             p_sin_obs = insertar_parrafo_antes(p_firma)
             p_sin_obs.paragraph_format.space_after = Pt(12)

@@ -1,119 +1,319 @@
+import io
+import json
 import base64
 import streamlit as st
 from datetime import date
 import db_cloud
 import generador_word
 
+try:
+    from PIL import Image, ImageOps
+    PIL_DISPONIBLE = True
+except ImportError:
+    PIL_DISPONIBLE = False
+
+MAX_FOTOS = 8
+
 st.set_page_config(
-    page_title="SGCS PBIP - Terminal Portuario San Nicolás",
+    page_title="SGCS PBIP | Terminal Portuario San Nicolás",
     page_icon="⚓",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- ESTILO EJECUTIVO CORPORATIVO (CSS) ---
+# ==============================================================================
+# ESTILO VISUAL EJECUTIVO CORPORATIVO (MARINO / ACERO / CARMÍN SHP)
+# ==============================================================================
 st.markdown("""
 <style>
-    .main-header {
-        background: linear-gradient(135deg, #0b2545 0%, #134074 100%);
-        color: white;
-        padding: 1.4rem 1.8rem;
-        border-radius: 12px;
-        margin-bottom: 1.2rem;
-        border-left: 6px solid #e63946;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    .main-header h2 {
+
+    /* Fondo limpio y suave */
+    .stApp {
+        background-color: #f1f5f9;
+    }
+
+    /* Sidebar elegante oscuro */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a192f 0%, #102a43 100%);
+        color: #f8fafc;
+        border-right: 1px solid #1e3a5f;
+    }
+    section[data-testid="stSidebar"] .stMarkdown,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span {
+        color: #e2e8f0 !important;
+    }
+    section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
+    section[data-testid="stSidebar"] input {
+        background-color: #163354 !important;
+        color: #ffffff !important;
+        border: 1px solid #2b4c7e !important;
+        border-radius: 8px !important;
+    }
+
+    /* Tarjeta institucional del Sidebar */
+    .sidebar-brand {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-left: 4px solid #e63946;
+        border-radius: 10px;
+        padding: 0.95rem 1rem;
+        margin-bottom: 1rem;
+    }
+    .sidebar-brand-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #ffffff !important;
+        letter-spacing: 0.5px;
         margin: 0;
-        font-size: 1.45rem;
+    }
+    .sidebar-brand-sub {
+        font-size: 0.76rem;
+        color: #94a3b8 !important;
+        margin: 0.2rem 0 0 0;
+    }
+
+    /* Banner Hero Superior */
+    .hero-banner {
+        background: linear-gradient(125deg, #0a192f 0%, #133b6e 65%, #1d4e89 100%);
+        border-radius: 16px;
+        padding: 1.6rem 2rem;
+        margin-bottom: 1.25rem;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 25px rgba(10, 25, 47, 0.16);
+        border-bottom: 4px solid #e63946;
+    }
+    .hero-badge {
+        display: inline-block;
+        background: rgba(230, 57, 70, 0.2);
+        border: 1px solid rgba(230, 57, 70, 0.55);
+        color: #ffd6da;
+        font-size: 0.72rem;
         font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        margin-bottom: 0.6rem;
+    }
+    .hero-title {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 800;
         color: #ffffff;
-        letter-spacing: 0.3px;
+        line-height: 1.25;
     }
-    .main-header p {
-        margin: 0.25rem 0 0 0;
+    .hero-subtitle {
+        margin: 0.4rem 0 0 0;
         font-size: 0.92rem;
-        color: #dce4f0;
+        color: #cbd5e1;
+        font-weight: 400;
     }
+    .hero-meta {
+        margin-top: 0.85rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+    }
+    .hero-chip {
+        background: rgba(255, 255, 255, 0.1);
+        color: #f1f5f9;
+        font-size: 0.78rem;
+        font-weight: 500;
+        padding: 0.28rem 0.75rem;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* Pestañas modernas */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: transparent;
+        padding-bottom: 4px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #ffffff;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        padding: 0.5rem 1.05rem;
+        font-weight: 600;
+        color: #334155;
+        transition: all 0.2s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #0f2d52 !important;
+        color: #ffffff !important;
+        border-color: #0f2d52 !important;
+        box-shadow: 0 4px 10px rgba(15, 45, 82, 0.2);
+    }
+
+    /* Tarjetas de ítems con indicador de estado */
     .item-card {
         background-color: #ffffff;
         border: 1px solid #e2e8f0;
-        border-left: 4px solid #134074;
-        border-radius: 8px;
-        padding: 0.85rem 1.1rem;
-        margin-bottom: 0.4rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+        border-radius: 12px;
+        padding: 1rem 1.2rem 0.8rem 1.2rem;
+        margin-top: 0.65rem;
+        margin-bottom: 0.45rem;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card-ok {
+        border-left: 5px solid #10b981;
+    }
+    .card-alert {
+        border-left: 5px solid #ef4444;
+        background-color: #fffafb;
+    }
+    .card-warn {
+        border-left: 5px solid #f59e0b;
+        background-color: #fffdf5;
+    }
+    .item-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .item-num-badge {
+        display: inline-block;
+        background: #0f2d52;
+        color: #ffffff;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.18rem 0.55rem;
+        border-radius: 6px;
+        margin-right: 0.45rem;
+        vertical-align: middle;
     }
     .item-title {
         font-size: 0.98rem;
-        font-weight: 600;
-        color: #1e293b;
-        margin-bottom: 0.2rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.35;
     }
     .item-sub {
-        font-size: 0.82rem;
+        font-size: 0.80rem;
         color: #64748b;
+        margin-top: 0.25rem;
     }
-    .metric-box {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        padding: 0.7rem 1rem;
-        text-align: center;
-    }
-    .metric-val {
-        font-size: 1.35rem;
+    .status-pill {
+        font-size: 0.72rem;
         font-weight: 700;
-        color: #0b2545;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        white-space: nowrap;
     }
-    .metric-lbl {
-        font-size: 0.78rem;
-        color: #475569;
+    .pill-ok {
+        background: #dcfce7;
+        color: #166534;
+    }
+    .pill-alert {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    .pill-warn {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    /* Métricas KPI ejecutivas */
+    .kpi-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 1rem 1.1rem;
+        text-align: center;
+        box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+    }
+    .kpi-value {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #0a192f;
+        line-height: 1.1;
+    }
+    .kpi-label {
+        font-size: 0.73rem;
+        font-weight: 600;
+        color: #64748b;
         text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-top: 0.35rem;
+    }
+
+    /* Botón principal estilizado */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #b91c1c 0%, #e63946 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        letter-spacing: 0.4px !important;
+        box-shadow: 0 6px 16px rgba(230, 57, 70, 0.28) !important;
+        transition: all 0.2s ease !important;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 8px 20px rgba(230, 57, 70, 0.38) !important;
+    }
+
+    /* Botón de descarga en verde esmeralda */
+    div.stDownloadButton > button {
+        background: linear-gradient(135deg, #047857 0%, #10b981 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.75rem 1.5rem !important;
+        font-weight: 700 !important;
+        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25) !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Inicialización automática de la base de datos en Turso
-if "db_initialized_v2" not in st.session_state:
+if "db_initialized_v3" not in st.session_state:
     try:
         db_cloud.init_tablas()
-        st.session_state["db_initialized_v2"] = True
+        st.session_state["db_initialized_v3"] = True
     except Exception:
         pass
 
 # ==============================================================================
-# CATÁLOGO OFICIAL DE LOS 5 FORMATOS DE INSPECCIÓN PBIP
+# CATÁLOGO OFICIAL DE FORMATOS PBIP
 # ==============================================================================
 CATALOGO_FORMATOS = {
     "R01-004-21": {
-        "titulo": "R01-004-21 | Inspección de Equipos Electrónicos de Protección",
+        "titulo": "R01-004-21 | Equipos Electrónicos de Protección",
         "subtitulo": "Verificación de operatividad de radios, CCTV, teléfonos, alarmas y luces de emergencia",
-        "tipo": "EQUIPOS",
         "opciones": ["OP", "INP"]
     },
     "R03-004-21": {
-        "titulo": "R03-004-21 | Lista de Verificación de Barreras Perimetrales y Accesos",
-        "subtitulo": "Inspección física de muros, cercos, control de pases, visitas y estacionamientos (32 puntos)",
-        "tipo": "CHECKLIST",
+        "titulo": "R03-004-21 | Barreras Perimetrales y Accesos",
+        "subtitulo": "Inspección de muros, cercos, control de pases, visitas y estacionamientos (32 puntos)",
         "opciones": ["SI", "NO", "N/A", "P/A"]
     },
     "R06-004-21": {
-        "titulo": "R06-004-21 | Control e Inspección de Iluminación del Terminal",
-        "subtitulo": "Verificación de luminarias perimetrales, áreas operativas, muelle, escaleras y luces de emergencia",
-        "tipo": "CHECKLIST",
+        "titulo": "R06-004-21 | Control e Inspección de Iluminación",
+        "subtitulo": "Evaluación de luminarias perimetrales, áreas operativas, muelle, escaleras y luces de emergencia",
         "opciones": ["SI", "NO", "N/A", "P/A"]
     },
     "R07-004-21": {
-        "titulo": "R07-004-21 | Inspección de Puertas de Acceso al Terminal",
+        "titulo": "R07-004-21 | Puertas de Acceso al Terminal",
         "subtitulo": "Verificación de estructura, supervisión, tableros de llaves, CCTV y registros de acceso",
-        "tipo": "CHECKLIST",
         "opciones": ["SI", "NO", "N/A", "P/A"]
     },
     "R08-004-21": {
-        "titulo": "R08-004-21 | Inspección de Dispositivos de Cierre, Candados y Llaves",
+        "titulo": "R08-004-21 | Dispositivos de Cierre, Candados y Llaves",
         "subtitulo": "Control de candados, chapas, puertas peatonales/vehiculares, S.E.E., Gantry y tablero de llaves",
-        "tipo": "CHECKLIST",
         "opciones": ["SI", "NO", "N/A", "P/A"]
     }
 }
@@ -166,7 +366,6 @@ INVENTARIO_R01 = [
 
 PREGUNTAS_CHECKLIST = {
     "R03-004-21": [
-        # Hoja 1 (1 al 17)
         {"it": 1, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "¿Existe un muro, reja o cerco perimetral adecuado y conforme a los estándares reconocidos de la industria?"},
         {"it": 2, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "¿El muro, reja o cerco perimetral está intacto?"},
         {"it": 3, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "¿Se inspecciona las murallas de albañilería o ladrillo cada 3 meses para determinar su efectividad y estimar cualquier reparación necesaria debido a erosión y uso?"},
@@ -184,7 +383,6 @@ PREGUNTAS_CHECKLIST = {
         {"it": 15, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "¿Provee el sistema de identificación en uso, el grado adecuado de seguridad?"},
         {"it": 16, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "El personal al que no se le ha entregado una tarjeta de identificación permanente ¿Es tratado como visita y se le entrega una tarjeta de visita?"},
         {"it": 17, "ubi": "Hoja 1 - Barreras y Accesos", "eq": "En los puntos de acceso, ¿Los guardias comparan los pases con los portadores al ingreso?"},
-        # Hoja 2 (18 al 32)
         {"it": 18, "ubi": "Hoja 2 - Pases y Estacionamiento", "eq": "¿Es adecuada la supervisión de la identificación del personal y del sistema de control?"},
         {"it": 19, "ubi": "Hoja 2 - Pases y Estacionamiento", "eq": "¿Se registran y controlan los pases y números de serie por procedimientos estrictos de contabilidad?"},
         {"it": 20, "ubi": "Hoja 2 - Pases y Estacionamiento", "eq": "¿Se reemplazan las tarjetas de identificación perdidas con TI con diferente número de serie?"},
@@ -215,11 +413,11 @@ PREGUNTAS_CHECKLIST = {
         {"it": 11, "ubi": "Iluminación General", "eq": "¿Las luminarias de la parte inferior del muelle están operativas?"},
         {"it": 12, "ubi": "Iluminación General", "eq": "¿La iluminación de la parte inferior del muelle es apropiada?"},
         {"it": 13, "ubi": "Iluminación General", "eq": "¿Se cuenta con reflectores o faros piratas?"},
-        {"it": 14, "ubi": "Iluminación Escaleras y Emergencia", "eq": "a.- Gantry (¿Las escalas o escaleras se encuentran iluminadas?)"},
-        {"it": 15, "ubi": "Iluminación Escaleras y Emergencia", "eq": "b.- Muelle (¿Las escalas o escaleras se encuentran iluminadas?)"},
-        {"it": 16, "ubi": "Iluminación Escaleras y Emergencia", "eq": "c.- Cabezo (¿Las escalas o escaleras se encuentran iluminadas?)"},
-        {"it": 17, "ubi": "Iluminación Escaleras y Emergencia", "eq": "¿Existen luces de emergencia?"},
-        {"it": 18, "ubi": "Iluminación Escaleras y Emergencia", "eq": "¿Se cumple el programa de mantenimiento?"}
+        {"it": 14, "ubi": "Escaleras y Emergencia", "eq": "a.- Gantry (¿Las escalas o escaleras se encuentran iluminadas?)"},
+        {"it": 15, "ubi": "Escaleras y Emergencia", "eq": "b.- Muelle (¿Las escalas o escaleras se encuentran iluminadas?)"},
+        {"it": 16, "ubi": "Escaleras y Emergencia", "eq": "c.- Cabezo (¿Las escalas o escaleras se encuentran iluminadas?)"},
+        {"it": 17, "ubi": "Escaleras y Emergencia", "eq": "¿Existen luces de emergencia?"},
+        {"it": 18, "ubi": "Escaleras y Emergencia", "eq": "¿Se cumple el programa de mantenimiento?"}
     ],
     "R07-004-21": [
         {"it": 1, "ubi": "Puertas de Acceso", "eq": "¿Las puertas de acceso al terminal son adecuadas en cuanto a su estructura?"},
@@ -257,40 +455,59 @@ PREGUNTAS_CHECKLIST = {
     ]
 }
 
-def codificar_imagen_b64(archivo_subido):
+def optimizar_y_codificar_b64(archivo_subido) -> str:
+    """Corrige orientación EXIF de cámara móvil, comprime a JPEG liviano y codifica en Base64."""
     if archivo_subido is None:
         return None
-    return base64.b64encode(archivo_subido.getvalue()).decode("utf-8")
+    raw_bytes = archivo_subido.getvalue()
+    if not PIL_DISPONIBLE:
+        return base64.b64encode(raw_bytes).decode("utf-8")
+
+    try:
+        img = Image.open(io.BytesIO(raw_bytes))
+        img = ImageOps.exif_transpose(img)  # Evita fotos giradas desde el celular
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.thumbnail((960, 960), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=78, optimize=True)
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    except Exception:
+        return base64.b64encode(raw_bytes).decode("utf-8")
 
 # ==============================================================================
-# BARRA LATERAL EJECUTIVA (SELECTOR DE FORMATO Y ARCHIVO HISTÓRICO)
+# BARRA LATERAL EJECUTIVA
 # ==============================================================================
 with st.sidebar:
-    st.markdown("### ⚓ **SHP - TP SAN NICOLÁS**")
-    st.caption("Sistema de Gestión en Control y Seguridad (PBIP / BASC)")
-    st.divider()
+    st.markdown("""
+    <div class="sidebar-brand">
+        <p class="sidebar-brand-title">⚓ SHP • TP SAN NICOLÁS</p>
+        <p class="sidebar-brand-sub">Sistema Digital de Inspecciones PBIP / BASC</p>
+    </div>
+    """, unsafe_allow_html=True)
 
     formato_sel = st.selectbox(
-        "📂 Seleccione Formato Oficial:",
+        "📂 Formato Oficial de Inspección",
         options=list(CATALOGO_FORMATOS.keys()),
         format_func=lambda k: CATALOGO_FORMATOS[k]["titulo"]
     )
 
     st.divider()
-    st.markdown("#### 📌 Datos de Cabecera")
+    st.markdown("##### 📌 Datos de la Inspección")
     fecha = st.date_input("Fecha de Inspección", date.today())
     turno = st.radio("Turno Operativo", ["Diurno", "Nocturno"], horizontal=True)
-    responsable = st.selectbox("Responsable de Inspección", ["OPIP", "Supervisor de Protección", "APP de Guardia"])
+    responsable = st.selectbox("Inspector / Responsable", ["OPIP", "Supervisor de Protección", "APP de Guardia"])
 
     st.divider()
-    st.markdown("#### 🔍 Historial / Reimpresión")
-    folio_antiguo = st.number_input("Folio ID a consultar:", min_value=1, value=1, step=1)
-    if st.button("📄 Descargar Folio Histórico", use_container_width=True):
+    st.markdown("##### 🔍 Consultar Folio Histórico")
+    folio_antiguo = st.number_input("Número de Folio ID:", min_value=1, value=1, step=1)
+    if st.button("📄 Reimprimir Folio", use_container_width=True):
         try:
-            doc_ant = generador_word.generar_desde_plantilla(inspeccion_id=int(folio_antiguo))
+            with st.spinner("Generando documento histórico..."):
+                doc_ant = generador_word.generar_desde_plantilla(inspeccion_id=int(folio_antiguo))
             with open(doc_ant, "rb") as f:
                 st.download_button(
-                    label=f"⬇️ Guardar Word (Folio {folio_antiguo})",
+                    label=f"⬇️ Descargar Folio #{folio_antiguo}",
                     data=f,
                     file_name=doc_ant,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -300,22 +517,32 @@ with st.sidebar:
             st.error(f"Error: {err}")
 
 # ==============================================================================
-# CUERPO PRINCIPAL EJECUTIVO
+# ENCABEZADO HERO CORPORATIVO
 # ==============================================================================
 info_fmt = CATALOGO_FORMATOS[formato_sel]
+fecha_str_bonita = fecha.strftime("%d/%m/%Y")
 
 st.markdown(f"""
-<div class="main-header">
-    <h2>🛡️ {info_fmt['titulo']}</h2>
-    <p>{info_fmt['subtitulo']} — <b>Shougang Hierro Perú S.A.A.</b></p>
+<div class="hero-banner">
+    <div class="hero-badge">SGCS • CÓDIGO PBIP / BASC</div>
+    <h1 class="hero-title">{info_fmt['titulo']}</h1>
+    <p class="hero-subtitle">{info_fmt['subtitulo']}</p>
+    <div class="hero-meta">
+        <span class="hero-chip">📅 Fecha: <b>{fecha_str_bonita}</b></span>
+        <span class="hero-chip">🕒 Turno: <b>{turno}</b></span>
+        <span class="hero-chip">👤 Inspector: <b>{responsable}</b></span>
+        <span class="hero-chip">📷 Hasta <b>{MAX_FOTOS} fotos</b> por ítem</span>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
+# ==============================================================================
+# CUERPO DE EVALUACIÓN POR ZONAS / SECCIONES
+# ==============================================================================
 items_actuales = INVENTARIO_R01 if formato_sel == "R01-004-21" else PREGUNTAS_CHECKLIST[formato_sel]
 opciones_estado = info_fmt["opciones"]
-estado_defecto_alerta = "INP" if formato_sel == "R01-004-21" else "NO"
+estado_alerta = "INP" if formato_sel == "R01-004-21" else "NO"
 
-# Agrupar por pestañas según la ubicación o sección
 zonas = []
 for item in items_actuales:
     if item["ubi"] not in zonas:
@@ -329,12 +556,32 @@ for idx, zona in enumerate(zonas):
         items_zona = [e for e in items_actuales if e["ubi"] == zona]
         for eq in items_zona:
             key_prefix = f"{formato_sel}_{eq['it']}"
-            sub_info = f"Marca: {eq.get('marca', '-')} | Serie: {eq.get('serie', '-')}" if formato_sel == "R01-004-21" else f"Requisito de Verificación #{eq['it']}"
+            est_prev = st.session_state.get(f"est_{key_prefix}", opciones_estado[0])
+
+            # Estilo dinámico de tarjeta según el estado seleccionado
+            if est_prev in ["OP", "SI"]:
+                card_cls, pill_cls, pill_txt = "card-ok", "pill-ok", f"✓ {est_prev}"
+            elif est_prev == estado_alerta:
+                card_cls, pill_cls, pill_txt = "card-alert", "pill-alert", f"✕ {est_prev}"
+            else:
+                card_cls, pill_cls, pill_txt = "card-warn", "pill-warn", f"• {est_prev}"
+
+            sub_info = (
+                f"Marca: <b>{eq.get('marca', '-')}</b> &nbsp;•&nbsp; Serie: <b>{eq.get('serie', '-')}</b>"
+                if formato_sel == "R01-004-21"
+                else f"Punto de verificación normativa PBIP"
+            )
 
             st.markdown(f"""
-            <div class="item-card">
-                <div class="item-title">({eq['it']}) {eq['eq']}</div>
-                <div class="item-sub">{sub_info}</div>
+            <div class="item-card {card_cls}">
+                <div class="item-header">
+                    <div>
+                        <span class="item-num-badge">#{eq['it']:02d}</span>
+                        <span class="item-title">{eq['eq']}</span>
+                        <div class="item-sub">{sub_info}</div>
+                    </div>
+                    <span class="status-pill {pill_cls}">{pill_txt}</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -349,38 +596,46 @@ for idx, zona in enumerate(zonas):
                 )
             with col_chk:
                 tiene_obs = st.checkbox(
-                    "📝 Registrar Observación / Evidencia Fotográfica",
-                    value=(estado == estado_defecto_alerta),
+                    f"📝 Añadir Observación / Fotos (hasta {MAX_FOTOS})",
+                    value=(estado == estado_alerta),
                     key=f"chk_{key_prefix}"
                 )
 
             obs_item = ""
-            foto_1_b64 = None
-            foto_2_b64 = None
+            lista_fotos_b64 = []
 
-            if tiene_obs or (estado == estado_defecto_alerta):
-                c_obs, c_fot = st.columns([1.3, 1.2])
+            if tiene_obs or (estado == estado_alerta):
+                c_obs, c_fot = st.columns([1.2, 1.3])
                 with c_obs:
                     obs_item = st.text_area(
-                        f"Detalle técnico del hallazgo (Ítem {eq['it']}):",
+                        f"Detalle técnico de la observación (Ítem #{eq['it']}):",
                         key=f"obs_{key_prefix}",
-                        placeholder="Describa la observación o condición detectada...",
-                        height=85
+                        placeholder="Describe el hallazgo, estado del candado/equipo o acción requerida...",
+                        height=100
                     )
                 with c_fot:
                     archivos_fotos = st.file_uploader(
-                        f"📷 Evidencia fotográfica (Máx. 2 fotos - 4.16x7.00 cm):",
+                        f"📷 Evidencias fotográficas (Máximo {MAX_FOTOS} fotos):",
                         type=["jpg", "jpeg", "png"],
                         accept_multiple_files=True,
                         key=f"fot_{key_prefix}"
                     )
                     if archivos_fotos:
-                        if len(archivos_fotos) > 2:
-                            st.warning("⚠️ Solo se incluirán las 2 primeras fotografías.")
-                        if len(archivos_fotos) >= 1:
-                            foto_1_b64 = codificar_imagen_b64(archivos_fotos[0])
-                        if len(archivos_fotos) >= 2:
-                            foto_2_b64 = codificar_imagen_b64(archivos_fotos[1])
+                        total_subidas = len(archivos_fotos)
+                        if total_subidas > MAX_FOTOS:
+                            st.warning(f"⚠️ Seleccionaste {total_subidas} fotos. Solo se incluirán las primeras {MAX_FOTOS} en el informe.")
+                        else:
+                            st.caption(f"✅ {total_subidas} de {MAX_FOTOS} fotos listas para el informe Word.")
+
+                        seleccionadas = archivos_fotos[:MAX_FOTOS]
+                        # Galería en miniatura (4 columnas)
+                        cols_prev = st.columns(4)
+                        for idx_f, arch in enumerate(seleccionadas):
+                            b64_img = optimizar_y_codificar_b64(arch)
+                            if b64_img:
+                                lista_fotos_b64.append(b64_img)
+                            with cols_prev[idx_f % 4]:
+                                st.image(arch, caption=f"Foto {idx_f + 1}", use_container_width=True)
 
             respuestas.append({
                 "it": eq["it"],
@@ -390,35 +645,41 @@ for idx, zona in enumerate(zonas):
                 "serie": eq.get("serie", ""),
                 "estado": estado,
                 "obs": obs_item.strip(),
-                "foto_1": foto_1_b64,
-                "foto_2": foto_2_b64
+                "fotos": lista_fotos_b64
             })
 
-# --- RESUMEN EJECUTIVO EN TIEMPO REAL ---
+# ==============================================================================
+# PANEL DE RESUMEN KPI Y GUARDADO EN LA NUBE
+# ==============================================================================
 st.divider()
 total_it = len(respuestas)
-total_obs = sum(1 for r in respuestas if r["obs"] or r["foto_1"] or r["foto_2"])
 total_ok = sum(1 for r in respuestas if r["estado"] in ["OP", "SI"])
+total_obs = sum(1 for r in respuestas if r["obs"] or len(r["fotos"]) > 0)
+total_fotos_gral = sum(len(r["fotos"]) for r in respuestas)
+pct_conf = (total_ok / total_it * 100) if total_it > 0 else 0
 
-m1, m2, m3, m4 = st.columns(4)
-with m1:
-    st.markdown(f'<div class="metric-box"><div class="metric-val">{formato_sel}</div><div class="metric-lbl">Formato Activo</div></div>', unsafe_allow_html=True)
-with m2:
-    st.markdown(f'<div class="metric-box"><div class="metric-val">{total_it}</div><div class="metric-lbl">Total Ítems Evaluados</div></div>', unsafe_allow_html=True)
-with m3:
-    st.markdown(f'<div class="metric-box"><div class="metric-val" style="color:#16a34a;">{total_ok}</div><div class="metric-lbl">Operativos / Cumple</div></div>', unsafe_allow_html=True)
-with m4:
-    st.markdown(f'<div class="metric-box"><div class="metric-val" style="color:#dc2626;">{total_obs}</div><div class="metric-lbl">Observaciones (OBS)</div></div>', unsafe_allow_html=True)
+st.markdown("#### 📊 Resumen de la Inspección en Curso")
+st.progress(pct_conf / 100, text=f"Índice de Conformidad / Operatividad: {pct_conf:.1f}% ({total_ok} de {total_it} ítems)")
+
+k1, k2, k3, k4 = st.columns(4)
+with k1:
+    st.markdown(f'<div class="kpi-card"><div class="kpi-value">{formato_sel}</div><div class="kpi-label">Formato Activo</div></div>', unsafe_allow_html=True)
+with k2:
+    st.markdown(f'<div class="kpi-card"><div class="kpi-value" style="color:#059669;">{total_ok} / {total_it}</div><div class="kpi-label">Conformes / OP</div></div>', unsafe_allow_html=True)
+with k3:
+    st.markdown(f'<div class="kpi-card"><div class="kpi-value" style="color:#dc2626;">{total_obs}</div><div class="kpi-label">Hallazgos (OBS)</div></div>', unsafe_allow_html=True)
+with k4:
+    st.markdown(f'<div class="kpi-card"><div class="kpi-value" style="color:#2563eb;">{total_fotos_gral}</div><div class="kpi-label">Fotos Adjuntas</div></div>', unsafe_allow_html=True)
 
 st.write("")
 obs_gral = st.text_input(
-    "Comentario General (Se imprimirá en caso de no existir observaciones específicas):",
+    "Comentario General (Se mostrará en el Word únicamente si no hay observaciones registradas):",
     "Sin observaciones."
 )
 
 if st.button("💾 GUARDAR INSPECCIÓN EN LA NUBE Y GENERAR WORD OFICIAL", type="primary", use_container_width=True):
     try:
-        with st.spinner("1/2 Sincronizando registro y fotografías en Turso Cloud..."):
+        with st.spinner("1/2 Sincronizando inspección y fotografías comprimidas con Turso Cloud..."):
             sql_cab = """
             INSERT INTO inspecciones_cabecera (codigo_formato, fecha_inspeccion, responsable_inspeccion, turno, observacion_general)
             VALUES (?, ?, ?, ?, ?);
@@ -429,10 +690,11 @@ if st.button("💾 GUARDAR INSPECCIÓN EN LA NUBE Y GENERAR WORD OFICIAL", type=
             cab_id = int(res_id["rows"][0][0]["value"])
 
             for r in respuestas:
+                fotos_json_str = json.dumps(r["fotos"]) if r["fotos"] else None
                 sql_det = """
-                INSERT INTO inspecciones_detalle 
-                (cabecera_id, item_nro, ubicacion, equipo_elemento, marca, serie, estado_operativo, observacion_item, accion_correctiva, foto_1, foto_2)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                INSERT INTO inspecciones_detalle
+                (cabecera_id, item_nro, ubicacion, equipo_elemento, marca, serie, estado_operativo, observacion_item, accion_correctiva, foto_1, foto_2, fotos_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """
                 db_cloud.ejecutar_sql(sql_det, [
                     cab_id,
@@ -444,17 +706,18 @@ if st.button("💾 GUARDAR INSPECCIÓN EN LA NUBE Y GENERAR WORD OFICIAL", type=
                     r["estado"],
                     r["obs"],
                     "",
-                    r["foto_1"],
-                    r["foto_2"]
+                    None,
+                    None,
+                    fotos_json_str
                 ])
 
-        with st.spinner("2/2 Compilando plantilla Word oficial con subíndices y evidencias..."):
+        with st.spinner("2/2 Compilando formato Word oficial con subíndices y evidencias fotográficas..."):
             archivo_generado = generador_word.generar_desde_plantilla(inspeccion_id=cab_id)
-            st.success(f"✅ ¡Inspección {formato_sel} registrada correctamente! (Folio N° {cab_id})")
+            st.success(f"✅ ¡Inspección {formato_sel} guardada con éxito! (Folio N° {cab_id} — {total_fotos_gral} fotos procesadas)")
 
             with open(archivo_generado, "rb") as f:
                 st.download_button(
-                    label=f"⬇️ DESCARGAR DOCUMENTO OFICIAL {formato_sel} (FOLIO {cab_id})",
+                    label=f"⬇️ DESCARGAR FORMATO OFICIAL {formato_sel} (FOLIO #{cab_id})",
                     data=f,
                     file_name=archivo_generado,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
