@@ -32,150 +32,135 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Fondo limpio y suave */
     .stApp {
-        background-color: #f1f5f9;
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
     }
 
-    /* Sidebar elegante oscuro */
+    /* Sidebar limpio de alto contraste (evita cajas blanco sobre blanco) */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0a192f 0%, #102a43 100%);
-        color: #f8fafc;
-        border-right: 1px solid #1e3a5f;
+        background-color: #ffffff !important;
+        border-right: 1px solid #cbd5e1 !important;
     }
-    section[data-testid="stSidebar"] .stMarkdown,
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] p,
-    section[data-testid="stSidebar"] span {
-        color: #e2e8f0 !important;
-    }
-    section[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] > div,
-    section[data-testid="stSidebar"] input {
-        background-color: #163354 !important;
-        color: #ffffff !important;
-        border: 1px solid #2b4c7e !important;
-        border-radius: 8px !important;
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] h5 {
+        color: #0f172a !important;
     }
 
-    /* Tarjeta institucional del Sidebar */
+    /* Tarjeta institucional del Sidebar (único bloque oscuro controlado) */
     .sidebar-brand {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-left: 4px solid #e63946;
+        background: linear-gradient(135deg, #0a192f 0%, #133b6e 100%) !important;
+        border-left: 4px solid #e63946 !important;
         border-radius: 10px;
         padding: 0.95rem 1rem;
         margin-bottom: 1rem;
+        box-shadow: 0 4px 10px rgba(10, 25, 47, 0.14);
     }
     .sidebar-brand-title {
-        font-size: 1.05rem;
-        font-weight: 800;
+        font-size: 1.02rem !important;
+        font-weight: 800 !important;
         color: #ffffff !important;
-        letter-spacing: 0.5px;
-        margin: 0;
+        letter-spacing: 0.4px;
+        margin: 0 !important;
     }
     .sidebar-brand-sub {
-        font-size: 0.76rem;
-        color: #94a3b8 !important;
-        margin: 0.2rem 0 0 0;
+        font-size: 0.76rem !important;
+        color: #cbd5e1 !important;
+        margin: 0.25rem 0 0 0 !important;
     }
 
-    /* Banner Hero Superior */
+    /* Banner Hero Superior con contraste forzado */
     .hero-banner {
-        background: linear-gradient(125deg, #0a192f 0%, #133b6e 65%, #1d4e89 100%);
+        background: linear-gradient(125deg, #0a192f 0%, #133b6e 65%, #1d4e89 100%) !important;
         border-radius: 16px;
-        padding: 1.6rem 2rem;
+        padding: 1.5rem 1.8rem;
         margin-bottom: 1.25rem;
-        position: relative;
-        overflow: hidden;
         box-shadow: 0 10px 25px rgba(10, 25, 47, 0.16);
         border-bottom: 4px solid #e63946;
     }
     .hero-badge {
         display: inline-block;
-        background: rgba(230, 57, 70, 0.2);
-        border: 1px solid rgba(230, 57, 70, 0.55);
-        color: #ffd6da;
+        background: rgba(230, 57, 70, 0.28) !important;
+        border: 1px solid rgba(255, 214, 218, 0.5) !important;
+        color: #ffffff !important;
         font-size: 0.72rem;
         font-weight: 700;
         letter-spacing: 1px;
         text-transform: uppercase;
-        padding: 0.25rem 0.7rem;
+        padding: 0.25rem 0.75rem;
         border-radius: 999px;
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.65rem;
     }
     .hero-title {
-        margin: 0;
-        font-size: 1.55rem;
-        font-weight: 800;
-        color: #ffffff;
-        line-height: 1.25;
+        margin: 0 !important;
+        font-size: 1.55rem !important;
+        font-weight: 800 !important;
+        color: #ffffff !important;
+        line-height: 1.25 !important;
     }
     .hero-subtitle {
-        margin: 0.4rem 0 0 0;
-        font-size: 0.92rem;
-        color: #cbd5e1;
+        margin: 0.45rem 0 0 0 !important;
+        font-size: 0.92rem !important;
+        color: #e2e8f0 !important;
         font-weight: 400;
     }
     .hero-meta {
-        margin-top: 0.85rem;
+        margin-top: 0.9rem;
         display: flex;
         flex-wrap: wrap;
-        gap: 0.65rem;
+        gap: 0.6rem;
     }
     .hero-chip {
-        background: rgba(255, 255, 255, 0.1);
-        color: #f1f5f9;
+        background: rgba(255, 255, 255, 0.14) !important;
+        color: #ffffff !important;
         font-size: 0.78rem;
         font-weight: 500;
-        padding: 0.28rem 0.75rem;
+        padding: 0.3rem 0.75rem;
         border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .hero-chip b {
+        color: #ffffff !important;
     }
 
-    /* Pestañas modernas */
+    /* Pestañas de zonas */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: transparent;
         padding-bottom: 4px;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #ffffff;
-        border: 1px solid #cbd5e1;
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
         border-radius: 10px;
         padding: 0.5rem 1.05rem;
         font-weight: 600;
-        color: #334155;
-        transition: all 0.2s ease;
+        color: #1e293b !important;
     }
     .stTabs [aria-selected="true"] {
         background-color: #0f2d52 !important;
         color: #ffffff !important;
         border-color: #0f2d52 !important;
-        box-shadow: 0 4px 10px rgba(15, 45, 82, 0.2);
+    }
+    .stTabs [aria-selected="true"] p {
+        color: #ffffff !important;
     }
 
-    /* Tarjetas de ítems con indicador de estado */
+    /* Tarjetas de ítems */
     .item-card {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1;
         border-radius: 12px;
-        padding: 1rem 1.2rem 0.8rem 1.2rem;
+        padding: 1rem 1.2rem 0.85rem 1.2rem;
         margin-top: 0.65rem;
         margin-bottom: 0.45rem;
-        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
     }
-    .card-ok {
-        border-left: 5px solid #10b981;
-    }
-    .card-alert {
-        border-left: 5px solid #ef4444;
-        background-color: #fffafb;
-    }
-    .card-warn {
-        border-left: 5px solid #f59e0b;
-        background-color: #fffdf5;
-    }
+    .card-ok { border-left: 5px solid #10b981 !important; }
+    .card-alert { border-left: 5px solid #ef4444 !important; background-color: #fff5f5 !important; }
+    .card-warn { border-left: 5px solid #f59e0b !important; background-color: #fffbeb !important; }
+
     .item-header {
         display: flex;
         align-items: flex-start;
@@ -184,71 +169,48 @@ st.markdown("""
     }
     .item-num-badge {
         display: inline-block;
-        background: #0f2d52;
-        color: #ffffff;
+        background: #0f2d52 !important;
+        color: #ffffff !important;
         font-size: 0.75rem;
         font-weight: 700;
         padding: 0.18rem 0.55rem;
         border-radius: 6px;
         margin-right: 0.45rem;
-        vertical-align: middle;
     }
     .item-title {
         font-size: 0.98rem;
         font-weight: 700;
-        color: #0f172a;
-        line-height: 1.35;
+        color: #0f172a !important;
     }
     .item-sub {
-        font-size: 0.80rem;
-        color: #64748b;
+        font-size: 0.82rem;
+        color: #475569 !important;
         margin-top: 0.25rem;
     }
     .status-pill {
         font-size: 0.72rem;
         font-weight: 700;
-        padding: 0.2rem 0.6rem;
+        padding: 0.22rem 0.65rem;
         border-radius: 999px;
         white-space: nowrap;
     }
-    .pill-ok {
-        background: #dcfce7;
-        color: #166534;
-    }
-    .pill-alert {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-    .pill-warn {
-        background: #fef3c7;
-        color: #92400e;
-    }
+    .pill-ok { background: #dcfce7 !important; color: #166534 !important; }
+    .pill-alert { background: #fee2e2 !important; color: #991b1b !important; }
+    .pill-warn { background: #fef3c7 !important; color: #92400e !important; }
 
-    /* Métricas KPI ejecutivas */
+    /* KPIs */
     .kpi-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1;
         border-radius: 14px;
         padding: 1rem 1.1rem;
         text-align: center;
         box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
     }
-    .kpi-value {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #0a192f;
-        line-height: 1.1;
-    }
-    .kpi-label {
-        font-size: 0.73rem;
-        font-weight: 600;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        margin-top: 0.35rem;
-    }
+    .kpi-value { font-size: 1.5rem; font-weight: 800; color: #0a192f !important; }
+    .kpi-label { font-size: 0.73rem; font-weight: 600; color: #475569 !important; text-transform: uppercase; margin-top: 0.35rem; }
 
-    /* Botón principal estilizado */
+    /* Botones principales */
     div.stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #b91c1c 0%, #e63946 100%) !important;
         color: #ffffff !important;
@@ -256,17 +218,7 @@ st.markdown("""
         border-radius: 12px !important;
         padding: 0.75rem 1.5rem !important;
         font-weight: 700 !important;
-        font-size: 1rem !important;
-        letter-spacing: 0.4px !important;
-        box-shadow: 0 6px 16px rgba(230, 57, 70, 0.28) !important;
-        transition: all 0.2s ease !important;
     }
-    div.stButton > button[kind="primary"]:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 8px 20px rgba(230, 57, 70, 0.38) !important;
-    }
-
-    /* Botón de descarga en verde esmeralda */
     div.stDownloadButton > button {
         background: linear-gradient(135deg, #047857 0%, #10b981 100%) !important;
         color: #ffffff !important;
@@ -274,7 +226,6 @@ st.markdown("""
         border-radius: 12px !important;
         padding: 0.75rem 1.5rem !important;
         font-weight: 700 !important;
-        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25) !important;
     }
 </style>
 """, unsafe_allow_html=True)
