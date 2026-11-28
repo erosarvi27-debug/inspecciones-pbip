@@ -7,6 +7,8 @@ import unicodedata
 from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import parse_xml
+from docx.oxml.ns import qn, nsdecls
 import db_cloud
 
 MAX_FOTOS_WORD = 8
@@ -19,6 +21,7 @@ MAPA_PLANTILLAS = {
     "R08-004-21": ["Plantilla_R08.docx"],
 }
 
+
 def normalizar_texto(txt: str) -> str:
     """Limpia tildes, signos y espacios para emparejar descripciones con exactitud."""
     if not txt:
@@ -27,8 +30,48 @@ def normalizar_texto(txt: str) -> str:
     txt = re.sub(r"[^a-zA-Z0-9]", "", txt).lower()
     return txt
 
+
 def insertar_parrafo_antes(parrafo_referencia):
     return parrafo_referencia.insert_paragraph_before()
+
+
+def aplicar_marco_negro_1pt(inline_shape):
+    """
+    Aplica marco rectangular negro (#000000) de 1 pt (12700 EMUs),
+    línea sólida con esquinas rectas, sin efectos y sin diseños de imagen.
+    """
+    inline = inline_shape._inline
+    spPr = inline.find(".//" + qn("pic:spPr"))
+    if spPr is None:
+        return
+
+    # Limpiar posibles bordes o efectos previos
+    for tag in ("a:ln", "a:effectLst", "a:scene3d", "a:sp3d"):
+        existente = spPr.find(qn(tag))
+        if existente is not None:
+            spPr.remove(existente)
+
+    # Borde sólido negro de 1 pt (1 pt = 12700 EMUs) con esquinas rectas
+    ln_xml = (
+        f'<a:ln {nsdecls("a")} w="12700" cap="flat" cmpd="sng" algn="ctr">'
+        f'  <a:solidFill><a:srgbClr val="000000"/></a:solidFill>'
+        f'  <a:prstDash val="solid"/>'
+        f'  <a:miter lim="800000"/>'
+        f'</a:ln>'
+    )
+    spPr.append(parse_xml(ln_xml))
+
+    # Lista de efectos vacía (sin sombra, sin reflejo, sin iluminado, sin 3D)
+    spPr.append(parse_xml(f'<a:effectLst {nsdecls("a")}/>'))
+
+    # Margen de extensión de 1 pt para que Word no recorte ninguno de los 4 bordes
+    effect_extent = inline.find(qn("wp:effectExtent"))
+    if effect_extent is not None:
+        effect_extent.set("l", "12700")
+        effect_extent.set("t", "12700")
+        effect_extent.set("r", "12700")
+        effect_extent.set("b", "12700")
+
 
 def resolver_ruta_plantilla(codigo_formato: str) -> str:
     candidatos = MAPA_PLANTILLAS.get(codigo_formato, ["Plantilla_R01_2.docx", "Plantilla_R01.docx"])
@@ -37,6 +80,7 @@ def resolver_ruta_plantilla(codigo_formato: str) -> str:
         if os.path.exists(ruta):
             return ruta
     raise FileNotFoundError(f"No se encontró la plantilla para {codigo_formato} en 'plantillas_oficiales/'.")
+
 
 def reemplazar_fecha_documento(doc, fecha_val: str):
     """Reemplaza FECHA: {{FECHA}} o FECHA: en párrafos y tablas de todas las hojas."""
@@ -59,6 +103,7 @@ def reemplazar_fecha_documento(doc, fecha_val: str):
                             p.runs[0].font.name = "Arial Narrow"
                             p.runs[0].font.size = Pt(10)
 
+
 def extraer_lista_fotos(f1_col, f2_col, fotos_json_col) -> list:
     """Obtiene hasta 8 imágenes en Base64 desde fotos_json o desde foto_1/foto_2 (folios antiguos)."""
     if fotos_json_col and fotos_json_col.get("type") != "null":
@@ -71,13 +116,13 @@ def extraer_lista_fotos(f1_col, f2_col, fotos_json_col) -> list:
             except Exception:
                 pass
 
-    # Respaldo para folios históricos guardados con el esquema de 2 fotos
     fotos_legacy = []
     if f1_col and f1_col.get("type") != "null" and f1_col.get("value"):
         fotos_legacy.append(f1_col["value"])
     if f2_col and f2_col.get("type") != "null" and f2_col.get("value"):
         fotos_legacy.append(f2_col["value"])
     return fotos_legacy[:MAX_FOTOS_WORD]
+
 
 def generar_desde_plantilla(inspeccion_id: int) -> str:
     # 1. Consultar Cabecera
@@ -276,7 +321,7 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                         r_x.font.size = Pt(9.5)
 
     # =========================================================================
-    # 5. SECCIÓN INFERIOR: OBSERVACIONES, HASTA 8 FOTOS (4.16 x 7.00 cm) Y FIRMA
+    # 5. SECCIÓN INFERIOR: OBSERVACIONES, HASTA 8 FOTOS CON MARCO NEGRO 1 PT Y FIRMA
     # =========================================================================
     p_obs_titulo = None
     p_firma = None
@@ -329,24 +374,28 @@ def generar_desde_plantilla(inspeccion_id: int) -> str:
                 r_det.font.name = "Arial Narrow"
                 r_det.font.size = Pt(10)
 
-                # Inserta hasta 8 fotos centradas en filas ordenadas de a 2 (4.16 cm x 7.00 cm)
+                # Inserta hasta 8 fotos centradas en pares (4.16 cm x 7.00 cm) con marco negro 1 pt
                 fotos_obs = obs_data["fotos"][:MAX_FOTOS_WORD]
                 for idx_par in range(0, len(fotos_obs), 2):
                     par_actual = fotos_obs[idx_par : idx_par + 2]
                     p_img = insertar_parrafo_antes(p_firma)
                     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    p_img.paragraph_format.space_before = Pt(4)
-                    p_img.paragraph_format.space_after = Pt(6)
+                    p_img.paragraph_format.space_before = Pt(5)
+                    p_img.paragraph_format.space_after = Pt(7)
 
                     for pos_en_par, b64_str in enumerate(par_actual):
                         try:
                             img_bytes = base64.b64decode(b64_str)
                             img_stream = io.BytesIO(img_bytes)
                             run_img = p_img.add_run()
-                            run_img.add_picture(img_stream, width=Cm(7.0), height=Cm(4.16))
+                            inline_shape = run_img.add_picture(
+                                img_stream, width=Cm(7.0), height=Cm(4.16)
+                            )
+                            aplicar_marco_negro_1pt(inline_shape)
+
                             if pos_en_par == 0 and len(par_actual) == 2:
-                                run_sep = p_img.add_run("   ")
-                                run_sep.font.size = Pt(8)
+                                run_sep = p_img.add_run("    ")
+                                run_sep.font.size = Pt(10)
                         except Exception as e_img:
                             print(f"Advertencia al insertar imagen: {e_img}")
         else:
