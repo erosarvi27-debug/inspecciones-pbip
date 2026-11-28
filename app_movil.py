@@ -466,7 +466,8 @@ with st.sidebar:
                 )
         except Exception as err:
             st.error(f"Error: {err}")
-
+    st.divider()
+    st.caption(f"⚙️ Frontend: Streamlit v{st.__version__}")
 # ==============================================================================
 # ENCABEZADO HERO CORPORATIVO
 # ==============================================================================
@@ -476,7 +477,7 @@ fecha_str_bonita = fecha.strftime("%d/%m/%Y")
 st.markdown(f"""
 <div class="hero-banner">
     <div class="hero-badge">SGCS • CÓDIGO PBIP / BASC</div>
-    <h1 class="hero-title">{info_fmt['titulo']}</h1>
+    <div class="hero-title">{info_fmt['titulo']}</div>
     <p class="hero-subtitle">{info_fmt['subtitulo']}</p>
     <div class="hero-meta">
         <span class="hero-chip">📅 Fecha: <b>{fecha_str_bonita}</b></span>
